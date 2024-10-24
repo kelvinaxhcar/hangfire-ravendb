@@ -22,6 +22,7 @@ jobs:
     - name: Geração do pacote
       run: |
         cd src
+        cd Hangfire.Raven
         dotnet build -c Release -o out
     
     - name: Push no NuGet
