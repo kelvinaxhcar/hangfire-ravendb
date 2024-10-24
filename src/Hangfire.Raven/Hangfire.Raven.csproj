@@ -8,7 +8,7 @@
 		<FileVersion>3.2.0.0</FileVersion>
 		<Description>RavenDB job storage for Hangfire</Description>
 		<PackageId>Hangfire.Raven6x</PackageId>
-		<Version>1.0.7</Version>
+		<Version>1.0.8</Version>
 		<Authors>Kelvin Mateus Axhcar</Authors>
 		<Company>KelvinAxhcar</Company>
 		<Copyright>Copyright @ KelvinAxhcar</Copyright>
