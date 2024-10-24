@@ -1,74 +1,66 @@
 ﻿using Hangfire.Annotations;
+using Hangfire.Raven.Extensions;
 using Hangfire.Raven.Storage;
 using Hangfire.Storage;
+using Raven.Client.Documents.Session;
+using System;
 
 namespace Hangfire.Raven.Entities
 {
-    public class RavenFetchedJob : IFetchedJob
+    public class RavenFetchedJob : IFetchedJob, IDisposable
     {
         private readonly RavenStorage _storage;
 
         private bool _requeued { get; set; }
+
         private bool _removedFromQueue { get; set; }
+
         private bool _disposed { get; set; }
 
         public string Id { get; set; }
+
         public string JobId { get; set; }
+
         public string Queue { get; set; }
 
-        public RavenFetchedJob(
-            [NotNull] RavenStorage storage,
-            JobQueue jobQueue)
+        public RavenFetchedJob([NotNull] RavenStorage storage, JobQueue jobQueue)
         {
-            storage.ThrowIfNull("storage");
-            jobQueue.ThrowIfNull("jobQueue");
-
-            _storage = storage;
-
-            JobId = jobQueue.JobId;
-            Queue = jobQueue.Queue;
-            Id = jobQueue.Id;
+            storage.ThrowIfNull(nameof(storage));
+            jobQueue.ThrowIfNull(nameof(jobQueue));
+            this._storage = storage;
+            this.JobId = jobQueue.JobId;
+            this.Queue = jobQueue.Queue;
+            this.Id = jobQueue.Id;
         }
 
         public void RemoveFromQueue()
         {
-            using (var repository = _storage.Repository.OpenSession()) {
-                var job = repository.Load<JobQueue>(Id);
-
-                if (job != null) {
-                    repository.Delete(job);
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                JobQueue entity = documentSession.Load<JobQueue>(this.Id);
+                if (entity != null)
+                {
+                    documentSession.Delete<JobQueue>(entity);
+                    documentSession.SaveChanges();
                 }
-                repository.SaveChanges();
             }
-
-            _removedFromQueue = true;
+            this._removedFromQueue = true;
         }
 
         public void Requeue()
         {
-            using (var repository = _storage.Repository.OpenSession()) {
-                var job = repository.Load<JobQueue>(Id);
-
-                job.FetchedAt = null;
-
-                repository.Store(job);
-                repository.SaveChanges();
-            }
-
-            _requeued = true;
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+                documentSession.Load<JobQueue>(this.Id).FetchedAt = new DateTime?();
+            this._requeued = true;
         }
 
         public void Dispose()
         {
-            if (_disposed) {
+            if (this._disposed)
                 return;
-            }
-
-            if (!_removedFromQueue && !_requeued) {
-                Requeue();
-            }
-
-            _disposed = true;
+            if (!this._removedFromQueue && !this._requeued)
+                this.Requeue();
+            this._disposed = true;
         }
     }
 }

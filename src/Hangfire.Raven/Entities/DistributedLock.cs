@@ -2,9 +2,10 @@
 {
     public class DistributedLock
     {
-        public string Id => $"DistributedLocks/{Resource}";
+        public string Id => "DistributedLocks/" + this.Resource;
 
         public string Resource { get; set; }
+
         public string ClientId { get; set; }
     }
 }

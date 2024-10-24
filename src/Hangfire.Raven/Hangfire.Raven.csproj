@@ -1,32 +1,27 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard1.6;netstandard1.5;netstandard1.4;netstandard1.3;net46;net45</TargetFrameworks>
-    <Version>3.2.0</Version>
-    <AssemblyVersion>3.2.0.0</AssemblyVersion>
-    <FileVersion>3.2.0.0</FileVersion>
-    <Description>RavenDB job storage for Hangfire</Description>
-    <Authors>CadyIO &lt;contact@cady.io&gt;</Authors>
-    <Company>Cady IO</Company>
-    <Copyright>Copyright @ Cady LLC</Copyright>
-    <PackageLicenseUrl>http://www.gnu.org/licenses/lgpl-3.0.html</PackageLicenseUrl>
-    <PackageProjectUrl>https://github.com/CadyIO/hangfire-ravendb</PackageProjectUrl>
-    <PackageIconUrl>https://avatars2.githubusercontent.com/u/7880472?v=3&amp;s=200</PackageIconUrl>
-    <PackageId>Hangfire.Raven</PackageId>
-    <PackageTags>Hangfire;AspNet;MVC;OWIN;RavenDB;Long-Running;Background;Fire-And-Forget;Delayed;Recurring;Tasks;Jobs;Scheduler;Threading;Queues</PackageTags>
-    <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/CadyIO/hangfire-ravendb</RepositoryUrl>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
+		<Version>3.2.0</Version>
+		<AssemblyVersion>3.2.0.0</AssemblyVersion>
+		<FileVersion>3.2.0.0</FileVersion>
+		<Description>RavenDB job storage for Hangfire</Description>
+		<Authors>CadyIO &lt;contact@cady.io&gt;</Authors>
+		<Company>Cady IO</Company>
+		<Copyright>Copyright @ Cady LLC</Copyright>
+		<PackageLicenseUrl>http://www.gnu.org/licenses/lgpl-3.0.html</PackageLicenseUrl>
+		<PackageProjectUrl>https://github.com/CadyIO/hangfire-ravendb</PackageProjectUrl>
+		<PackageIconUrl>https://avatars2.githubusercontent.com/u/7880472?v=3&amp;s=200</PackageIconUrl>
+		<PackageId>Hangfire.Raven</PackageId>
+		<PackageTags>Hangfire;AspNet;MVC;OWIN;RavenDB;Long-Running;Background;Fire-And-Forget;Delayed;Recurring;Tasks;Jobs;Scheduler;Threading;Queues</PackageTags>
+		<RepositoryType>git</RepositoryType>
+		<RepositoryUrl>https://github.com/CadyIO/hangfire-ravendb</RepositoryUrl>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DocumentationFile>bin\Debug\netstandard2.0\Hangfire.Raven.xml</DocumentationFile>
-    <GenerateSerializationAssemblies></GenerateSerializationAssemblies>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Hangfire.Core" Version="1.6.17" />
-    <PackageReference Include="Newtonsoft.Json" Version="10.0.3" />
-    <PackageReference Include="RavenDB.Client" Version="3.5.4" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Hangfire.Core" Version="1.6.17" />
+		<PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
+		<PackageReference Include="RavenDB.Client" Version="5.1.4" />
+	</ItemGroup>
 
 </Project>

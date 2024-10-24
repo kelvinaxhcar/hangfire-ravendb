@@ -1,31 +1,17 @@
-﻿// This file is part of Hangfire.
-// Copyright © 2013-2014 Sergey Odinokov.
-// 
-// Hangfire is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as 
-// published by the Free Software Foundation, either version 3 
-// of the License, or any later version.
-// 
-// Hangfire is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-// 
-// You should have received a copy of the GNU Lesser General Public 
-// License along with Hangfire. If not, see <http://www.gnu.org/licenses/>.
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using Hangfire.Common;
+﻿using Hangfire.Common;
 using Hangfire.Raven.DistributedLocks;
 using Hangfire.Raven.Entities;
+using Hangfire.Raven.Extensions;
+using Hangfire.Raven.JobQueues;
 using Hangfire.Raven.Storage;
 using Hangfire.Server;
 using Hangfire.Storage;
-using static Hangfire.Raven.Entities.RavenJob;
-using Hangfire.Raven.Indexes;
+using Raven.Client.Documents.Session;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Threading;
 
 namespace Hangfire.Raven
 {
@@ -35,524 +21,381 @@ namespace Hangfire.Raven
 
         public RavenConnection(RavenStorage storage)
         {
-            storage.ThrowIfNull("storage");
-
-            _storage = storage;
+            storage.ThrowIfNull(nameof(storage));
+            this._storage = storage;
         }
 
-        public override IWriteOnlyTransaction CreateWriteTransaction() => new RavenWriteOnlyTransaction(_storage);
+        public override IWriteOnlyTransaction CreateWriteTransaction()
+        {
+            return (IWriteOnlyTransaction)new RavenWriteOnlyTransaction(this._storage);
+        }
 
-        public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout) => new RavenDistributedLock(_storage, string.Format("HangFire/{0}", resource), timeout, _storage.Options);
+        public override IDisposable AcquireDistributedLock(string resource, TimeSpan timeout)
+        {
+            return (IDisposable)new RavenDistributedLock(this._storage, "HangFire/" + resource, timeout, this._storage.Options);
+        }
 
         public override IFetchedJob FetchNextJob(string[] queues, CancellationToken cancellationToken)
         {
-            queues.ThrowIfNull("queues");
-
-            if (queues.Length == 0) {
-                throw new ArgumentNullException("queues");
-            }
-
-            var providers = queues
-                .Select(queue => _storage.QueueProviders.GetProvider(queue))
-                .Distinct()
-                .ToArray();
-
-            if (providers.Length != 1) {
-                throw new InvalidOperationException(string.Format(
-                    "Multiple provider instances registered for queues: {0}. You should choose only one type of persistent queues per server instance.",
-                    string.Join(", ", queues)));
-            }
-
-            var persistentQueue = providers[0].GetJobQueue();
-
-            return persistentQueue.Dequeue(queues, cancellationToken);
+            if (queues == null || queues.Length == 0)
+                throw new ArgumentNullException(nameof(queues));
+            IPersistentJobQueueProvider[] array = ((IEnumerable<string>)queues).Select<string, IPersistentJobQueueProvider>((Func<string, IPersistentJobQueueProvider>)(queue => this._storage.QueueProviders.GetProvider(queue))).Distinct<IPersistentJobQueueProvider>().ToArray<IPersistentJobQueueProvider>();
+            if (array.Length != 1)
+                throw new InvalidOperationException("Multiple provider instances registered for queues: " + string.Join(", ", queues) + ". You should choose only one type of persistent queues per server instance.");
+            return array[0].GetJobQueue().Dequeue(queues, cancellationToken);
         }
 
         public override string CreateExpiredJob(
-            Job job,
-            IDictionary<string, string> parameters,
-            DateTime createdAt,
-            TimeSpan expireIn)
+          Job job,
+          IDictionary<string, string> parameters,
+          DateTime createdAt,
+          TimeSpan expireIn)
         {
-            job.ThrowIfNull("job");
-            parameters.ThrowIfNull("parameters");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var invocationData = InvocationData.Serialize(job);
-
-                var guid = Guid.NewGuid().ToString();
-
-                var ravenJob = new RavenJob {
-                    Id = _storage.Repository.GetId(typeof(RavenJob), guid),
-                    InvocationData = invocationData,
-                    CreatedAt = createdAt,
-                    Parameters = parameters
-                };
-
-                repository.Store(ravenJob);
-                repository.Advanced.AddExpire(ravenJob, createdAt + expireIn);
-
-                repository.SaveChanges();
-
-                return guid;
+            job.ThrowIfNull(nameof(job));
+            parameters.ThrowIfNull(nameof(parameters));
+            InvocationData invocationData = InvocationData.Serialize(job);
+            string expiredJob = Guid.NewGuid().ToString();
+            RavenJob entity = new RavenJob()
+            {
+                Id = this._storage.Repository.GetId(typeof(RavenJob), expiredJob),
+                InvocationData = invocationData,
+                CreatedAt = createdAt,
+                Parameters = parameters
+            };
+            using (IDocumentSession session = this._storage.Repository.OpenSession())
+            {
+                session.Store((object)entity);
+                session.SetExpiry<RavenJob>(entity, createdAt + expireIn);
+                session.SaveChanges();
+                return expiredJob;
             }
         }
 
         public override JobData GetJobData(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenJob), key);
-                var jobData = repository.Load<RavenJob>(id);
-
-                if (jobData == null) {
-                    return null;
-                }
-
-                Job job = null;
-                JobLoadException loadException = null;
-
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenJob), key);
+                RavenJob ravenJob = documentSession.Load<RavenJob>(id);
+                if (ravenJob == null)
+                    return (JobData)null;
+                Job job = (Job)null;
+                JobLoadException jobLoadException = (JobLoadException)null;
                 try
                 {
-                    job = jobData.InvocationData.Deserialize();
+                    job = ravenJob.InvocationData.Deserialize();
                 }
                 catch (JobLoadException ex)
                 {
-                    loadException = ex;
+                    jobLoadException = ex;
                 }
-
-                return new JobData {
+                return new JobData()
+                {
                     Job = job,
-                    State = jobData.StateData?.Name,
-                    CreatedAt = jobData.CreatedAt,
-                    LoadException = loadException
+                    State = ravenJob.StateData?.Name,
+                    CreatedAt = ravenJob.CreatedAt,
+                    LoadException = jobLoadException
                 };
             }
         }
 
         public override StateData GetStateData(string jobId)
         {
-            jobId.ThrowIfNull("jobId");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenJob), jobId);
-                var job = repository.Load<RavenJob>(id);
-
-                if (job == null) {
-                    return null;
-                }
-
-                return job.StateData;
+            jobId.ThrowIfNull(nameof(jobId));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenJob), jobId);
+                return documentSession.Load<RavenJob>(id)?.StateData;
             }
         }
 
         public override void SetJobParameter(string jobId, string name, string value)
         {
-            jobId.ThrowIfNull("jobId");
-            name.ThrowIfNull("name");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenJob), jobId);
-                var job = repository.Load<RavenJob>(id);
-
-                job.Parameters[name] = value;
-
-                repository.SaveChanges();
+            jobId.ThrowIfNull(nameof(jobId));
+            name.ThrowIfNull(nameof(name));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenJob), jobId);
+                documentSession.Load<RavenJob>(id).Parameters[name] = value;
+                documentSession.SaveChanges();
             }
         }
 
         public override string GetJobParameter(string jobId, string name)
         {
-            jobId.ThrowIfNull("jobId");
-            name.ThrowIfNull("name");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenJob), jobId);
-                var job = repository.Load<RavenJob>(id);
-
-                if (job == null) {
-                    return null;
-                }
-
-                string value;
-
-                if (!job.Parameters.TryGetValue(name, out value)) {
-                    if (name == "RetryCount") {
-                        job.Parameters["RetryCount"] = "0";
-                        repository.SaveChanges();
-
-                        return "0";
-                    }
-
-                    return null;
-                }
-
-                return value;
+            jobId.ThrowIfNull(nameof(jobId));
+            name.ThrowIfNull(nameof(name));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenJob), jobId);
+                RavenJob ravenJob = documentSession.Load<RavenJob>(id);
+                if (ravenJob == null)
+                    return (string)null;
+                string jobParameter;
+                if (ravenJob.Parameters.TryGetValue(name, out jobParameter))
+                    return jobParameter;
+                if (!(name == "RetryCount"))
+                    return (string)null;
+                ravenJob.Parameters["RetryCount"] = "0";
+                documentSession.SaveChanges();
+                return "0";
             }
         }
 
         public override HashSet<string> GetAllItemsFromSet(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenSet), key);
-                var set = repository.Load<RavenSet>(id);
-
-                if (set == null) {
-                    return new HashSet<string>();
-                }
-
-                return new HashSet<string>(set.Scores.Keys);
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenSet), key);
+                RavenSet ravenSet = documentSession.Load<RavenSet>(id);
+                return ravenSet == null ? new HashSet<string>() : new HashSet<string>((IEnumerable<string>)ravenSet.Scores.Keys);
             }
         }
 
-        public override string GetFirstByLowestScoreFromSet(string key, double fromScore, double toScore)
+        public override string GetFirstByLowestScoreFromSet(
+          string key,
+          double fromScore,
+          double toScore)
         {
-            key.ThrowIfNull("key");
-
-            if (toScore < fromScore) {
+            key.ThrowIfNull(nameof(key));
+            if (toScore < fromScore)
                 throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
-            }
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenSet), key);
-                var set = repository.Load<RavenSet>(id);
-
-                if (set == null) {
-                    return null;
-                }
-
-                return set.Scores.Where(a => a.Value >= fromScore && a.Value <= toScore).OrderBy(a => a.Value).Select(a => a.Key).FirstOrDefault();
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenSet), key);
+                RavenSet ravenSet = documentSession.Load<RavenSet>(id);
+                return ravenSet == null ? (string)null : ravenSet.Scores.Where<KeyValuePair<string, double>>((Func<KeyValuePair<string, double>, bool>)(a => a.Value >= fromScore && a.Value <= toScore)).OrderBy<KeyValuePair<string, double>, double>((Func<KeyValuePair<string, double>, double>)(a => a.Value)).Select<KeyValuePair<string, double>, string>((Func<KeyValuePair<string, double>, string>)(a => a.Key)).FirstOrDefault<string>();
             }
         }
 
-        public override void SetRangeInHash(string key, IEnumerable<KeyValuePair<string, string>> keyValuePairs)
+        public override void SetRangeInHash(
+          string key,
+          IEnumerable<KeyValuePair<string, string>> keyValuePairs)
         {
-            key.ThrowIfNull("key");
-            keyValuePairs.ThrowIfNull("keyValuePairs");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenHash), key);
-                var result = repository.Load<RavenHash>(id);
-
-                if (result == null) {
-                    result = new RavenHash() {
-                        Id = id
-                    };
-
-                    repository.Store(result);
+            key.ThrowIfNull(nameof(key));
+            keyValuePairs.ThrowIfNull(nameof(keyValuePairs));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenHash), key);
+                RavenHash entity = documentSession.Load<RavenHash>(id);
+                if (entity == null)
+                {
+                    entity = new RavenHash() { Id = id };
+                    documentSession.Store((object)entity);
                 }
-
-                foreach (var keyValuePair in keyValuePairs) {
-                    result.Fields[keyValuePair.Key] = keyValuePair.Value;
-                }
-
-                repository.SaveChanges();
+                foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
+                    entity.Fields[keyValuePair.Key] = keyValuePair.Value;
+                documentSession.SaveChanges();
             }
         }
 
         public override Dictionary<string, string> GetAllEntriesFromHash(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var result = repository.Load<RavenHash>(_storage.Repository.GetId(typeof(RavenHash), key));
-
-                return result?.Fields;
-            }
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+                return documentSession.Load<RavenHash>(this._storage.Repository.GetId(typeof(RavenHash), key))?.Fields;
         }
 
         public override void AnnounceServer(string serverId, ServerContext context)
         {
-            serverId.ThrowIfNull("serverId");
-            context.ThrowIfNull("context");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenServer), serverId);
-                var server = repository.Load<RavenServer>(id);
-
-                if (server == null) {
-                    server = new RavenServer() {
+            serverId.ThrowIfNull(nameof(serverId));
+            context.ThrowIfNull(nameof(context));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenServer), serverId);
+                RavenServer entity = documentSession.Load<RavenServer>(id);
+                if (entity == null)
+                {
+                    entity = new RavenServer()
+                    {
                         Id = id,
                         Data = new RavenServer.ServerData()
                         {
-                            StartedAt = DateTime.UtcNow
+                            StartedAt = new DateTime?(DateTime.UtcNow)
                         }
                     };
-
-                    repository.Store(server);
+                    documentSession.Store((object)entity);
                 }
-
-                server.Data.WorkerCount = context.WorkerCount;
-                server.Data.Queues = context.Queues;
-                server.Data.StartedAt = DateTime.UtcNow;
-
-                server.LastHeartbeat = DateTime.UtcNow;
-
-                repository.SaveChanges();
+                entity.Data.WorkerCount = context.WorkerCount;
+                entity.Data.Queues = (IEnumerable<string>)context.Queues;
+                entity.Data.StartedAt = new DateTime?(DateTime.UtcNow);
+                entity.LastHeartbeat = DateTime.UtcNow;
+                documentSession.SaveChanges();
             }
         }
 
         public override void RemoveServer(string serverId)
         {
-            serverId.ThrowIfNull("serverId");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenServer), serverId);
-
-                repository.Delete(id);
-
-                repository.SaveChanges();
+            serverId.ThrowIfNull(nameof(serverId));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenServer), serverId);
+                documentSession.Delete(id);
+                documentSession.SaveChanges();
             }
         }
 
         public override void Heartbeat(string serverId)
         {
-            serverId.ThrowIfNull("serverId");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenServer), serverId);
-                var server = repository.Load<RavenServer>(id);
-
-                if (server == null) {
-                    server = new RavenServer {
-                        Id = id
-                    };
-
-                    repository.Store(server);
+            serverId.ThrowIfNull(nameof(serverId));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenServer), serverId);
+                RavenServer entity = documentSession.Load<RavenServer>(id);
+                if (entity == null)
+                {
+                    entity = new RavenServer() { Id = id };
+                    documentSession.Store((object)entity);
                 }
-
-                server.LastHeartbeat = DateTime.UtcNow;
-
-                repository.SaveChanges();
+                entity.LastHeartbeat = DateTime.UtcNow;
+                documentSession.SaveChanges();
             }
         }
 
         public override int RemoveTimedOutServers(TimeSpan timeOut)
         {
-            if (timeOut.Duration() != timeOut) {
-                throw new ArgumentException("The `timeOut` value must be positive.", "timeOut");
-            }
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var heartBeatCutOff = DateTime.UtcNow.Add(timeOut.Negate());
-
-                var results = repository.Query<Hangfire_RavenServers.Mapping, Hangfire_RavenServers>()
-                                .Where(t => t.LastHeartbeat < heartBeatCutOff)
-                                .OfType<RavenServer>()
-                                .ToList();
-
-                foreach (var item in results) {
-                    repository.Delete(item);
-                }
-
-                repository.SaveChanges();
-
-                return results.Count;
+            if (timeOut.Duration() != timeOut)
+                throw new ArgumentException("The `timeOut` value must be positive.", nameof(timeOut));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                DateTime heartBeatCutOff = DateTime.UtcNow.Add(timeOut.Negate());
+                List<RavenServer> list = documentSession.Query<RavenServer>().Where<RavenServer>((Expression<Func<RavenServer, bool>>)(t => t.LastHeartbeat < heartBeatCutOff)).ToList<RavenServer>();
+                foreach (RavenServer entity in list)
+                    documentSession.Delete<RavenServer>(entity);
+                documentSession.SaveChanges();
+                return list.Count;
             }
         }
 
         public override long GetSetCount(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenSet), key);
-                var set = repository.Load<RavenSet>(id);
-
-                if (set == null) {
-                    return 0;
-                }
-
-                return set.Scores.Count;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenSet), key);
+                RavenSet ravenSet = documentSession.Load<RavenSet>(id);
+                return ravenSet == null ? 0L : (long)ravenSet.Scores.Count;
             }
         }
 
         public override List<string> GetRangeFromSet(string key, int startingFrom, int endingAt)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenSet), key);
-                var set = repository.Load<RavenSet>(id);
-
-                if (set == null) {
-                    return new List<string>();
-                }
-
-                return set.Scores.Skip(startingFrom)
-                            .Take(endingAt - startingFrom + 1)
-                            .Select(t => t.Key)
-                            .ToList();
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenSet), key);
+                RavenSet ravenSet = documentSession.Load<RavenSet>(id);
+                return ravenSet == null ? new List<string>() : ravenSet.Scores.Skip<KeyValuePair<string, double>>(startingFrom).Take<KeyValuePair<string, double>>(endingAt - startingFrom + 1).Select<KeyValuePair<string, double>, string>((Func<KeyValuePair<string, double>, string>)(t => t.Key)).ToList<string>();
             }
         }
 
         public override TimeSpan GetSetTtl(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenSet), key);
-                var set = repository.Load<RavenSet>(id);
-
-                if (set == null) {
-                    return TimeSpan.FromSeconds(-1);
-                }
-
-                var expireAt = repository.Advanced.GetExpire(set);
-
-                if (expireAt == null) {
-                    return TimeSpan.FromSeconds(-1);
-                }
-
-                return expireAt.Value - DateTime.UtcNow;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession session = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenSet), key);
+                RavenSet ravenSet = session.Load<RavenSet>(id);
+                if (ravenSet == null)
+                    return TimeSpan.FromSeconds(-1.0);
+                DateTime? expiry = session.GetExpiry<RavenSet>(ravenSet);
+                return !expiry.HasValue ? TimeSpan.FromSeconds(-1.0) : expiry.Value - DateTime.UtcNow;
             }
         }
 
         public override long GetCounter(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(Counter), key);
-                var counter = repository.Load<Counter>(id);
-
-                if (counter == null) {
-                    return 0;
-                }
-
-                return counter.Value;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(Counter), key);
+                Counter counter = documentSession.Load<Counter>(id);
+                return counter == null ? 0L : (long)counter.Value;
             }
         }
 
         public override long GetHashCount(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var ravenHash = repository.Load<RavenHash>(_storage.Repository.GetId(typeof(RavenHash), key));
-
-                if (ravenHash == null) {
-                    return 0;
-                }
-
-                return ravenHash.Fields.Count;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                RavenHash ravenHash = documentSession.Load<RavenHash>(this._storage.Repository.GetId(typeof(RavenHash), key));
+                return ravenHash == null ? 0L : (long)ravenHash.Fields.Count;
             }
         }
 
         public override TimeSpan GetHashTtl(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var ravenHash = repository.Load<RavenHash>(_storage.Repository.GetId(typeof(RavenHash), key));
-
-                if (ravenHash == null) {
-                    return TimeSpan.FromSeconds(-1);
-                }
-
-                var expireAt = repository.Advanced.GetExpire(ravenHash);
-
-                if (!expireAt.HasValue) {
-                    return TimeSpan.FromSeconds(-1);
-                }
-
-                return expireAt.Value - DateTime.UtcNow;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession session = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenHash), key);
+                RavenHash ravenHash = session.Load<RavenHash>(id);
+                if (ravenHash == null)
+                    return TimeSpan.FromSeconds(-1.0);
+                DateTime? expiry = session.GetExpiry<RavenHash>(ravenHash);
+                return !expiry.HasValue ? TimeSpan.FromSeconds(-1.0) : expiry.Value - DateTime.UtcNow;
             }
         }
 
         public override string GetValueFromHash(string key, string name)
         {
-            key.ThrowIfNull("key");
-            name.ThrowIfNull("name");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var ravenHash = repository.Load<RavenHash>(_storage.Repository.GetId(typeof(RavenHash), key));
-
-                if (ravenHash == null) {
-                    return null;
-                }
-
-                string result;
-
-                if (!ravenHash.Fields.TryGetValue(name, out result)) {
-                    return null;
-                }
-
-                return result;
+            key.ThrowIfNull(nameof(key));
+            name.ThrowIfNull(nameof(name));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                RavenHash ravenHash = documentSession.Load<RavenHash>(this._storage.Repository.GetId(typeof(RavenHash), key));
+                string str;
+                return ravenHash == null || !ravenHash.Fields.TryGetValue(name, out str) ? (string)null : str;
             }
         }
 
         public override long GetListCount(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenList), key);
-                var list = repository.Load<RavenList>(id);
-
-                if (list == null) {
-                    return 0;
-                }
-
-                return list.Values.Count;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenList), key);
+                RavenList ravenList = documentSession.Load<RavenList>(id);
+                return ravenList == null ? 0L : (long)ravenList.Values.Count;
             }
         }
 
         public override TimeSpan GetListTtl(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var list = repository.Load<RavenList>(_storage.Repository.GetId(typeof(RavenList), key));
-
-                if (list == null) {
-                    return TimeSpan.FromSeconds(-1);
-                }
-
-                var expireAt = repository.Advanced.GetExpire(list);
-
-                if (!expireAt.HasValue) {
-                    return TimeSpan.FromSeconds(-1);
-                }
-
-                return expireAt.Value - DateTime.UtcNow;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession session = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenList), key);
+                RavenList ravenList = session.Load<RavenList>(id);
+                if (ravenList == null)
+                    return TimeSpan.FromSeconds(-1.0);
+                DateTime? expiry = session.GetExpiry<RavenList>(ravenList);
+                return !expiry.HasValue ? TimeSpan.FromSeconds(-1.0) : expiry.Value - DateTime.UtcNow;
             }
         }
 
         public override List<string> GetRangeFromList(string key, int startingFrom, int endingAt)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenList), key);
-                var list = repository.Load<RavenList>(id);
-
-                if (list == null) {
-                    return new List<string>();
-                }
-
-                return list.Values.Skip(startingFrom)
-                            .Take(endingAt - startingFrom + 1)
-                            .ToList();
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenList), key);
+                RavenList ravenList = documentSession.Load<RavenList>(id);
+                return ravenList == null ? new List<string>() : ravenList.Values.Skip<string>(startingFrom).Take<string>(endingAt - startingFrom + 1).ToList<string>();
             }
         }
 
         public override List<string> GetAllItemsFromList(string key)
         {
-            key.ThrowIfNull("key");
-
-            using (var repository = _storage.Repository.OpenSession()) {
-                var id = _storage.Repository.GetId(typeof(RavenList), key);
-                var list = repository.Load<RavenList>(id);
-
-                if (list == null) {
-                    return new List<string>();
-                }
-
-                return list.Values;
+            key.ThrowIfNull(nameof(key));
+            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            {
+                string id = this._storage.Repository.GetId(typeof(RavenList), key);
+                RavenList ravenList = documentSession.Load<RavenList>(id);
+                return ravenList == null ? new List<string>() : ravenList.Values;
             }
         }
     }
