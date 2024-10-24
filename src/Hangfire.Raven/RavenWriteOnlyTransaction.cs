@@ -27,49 +27,49 @@ namespace Hangfire.Raven
         public RavenWriteOnlyTransaction([NotNull] RavenStorage storage)
         {
             storage.ThrowIfNull(nameof(storage));
-            this._storage = storage;
-            this._patchRequests = new List<KeyValuePair<string, PatchRequest>>();
-            this._session = this._storage.Repository.OpenSession();
-            this._session.Advanced.UseOptimisticConcurrency = false;
-            this._session.Advanced.MaxNumberOfRequestsPerSession = int.MaxValue;
+            _storage = storage;
+            _patchRequests = new List<KeyValuePair<string, PatchRequest>>();
+            _session = _storage.Repository.OpenSession();
+            _session.Advanced.UseOptimisticConcurrency = false;
+            _session.Advanced.MaxNumberOfRequestsPerSession = int.MaxValue;
         }
 
         public override void Commit()
         {
-            foreach (IGrouping<string, PatchRequest> grouping in (IEnumerable<IGrouping<string, PatchRequest>>)this._patchRequests.ToLookup<KeyValuePair<string, PatchRequest>, string, PatchRequest>((Func<KeyValuePair<string, PatchRequest>, string>)(a => a.Key), (Func<KeyValuePair<string, PatchRequest>, PatchRequest>)(a => a.Value)))
+            foreach (IGrouping<string, PatchRequest> grouping in (IEnumerable<IGrouping<string, PatchRequest>>)_patchRequests.ToLookup<KeyValuePair<string, PatchRequest>, string, PatchRequest>((Func<KeyValuePair<string, PatchRequest>, string>)(a => a.Key), (Func<KeyValuePair<string, PatchRequest>, PatchRequest>)(a => a.Value)))
             {
                 IGrouping<string, PatchRequest> item = grouping;
                 foreach (ICommandData command in item.Select<PatchRequest, PatchCommandData>((Func<PatchRequest, PatchCommandData>)(x => new PatchCommandData(item.Key, (string)null, x, (PatchRequest)null))))
-                    this._session.Advanced.Defer(command);
+                    _session.Advanced.Defer(command);
             }
             try
             {
-                this._session.SaveChanges();
-                this._session.Dispose();
+                _session.SaveChanges();
+                _session.Dispose();
             }
             catch
             {
                 RavenWriteOnlyTransaction.Logger.Error("- Concurrency exception");
-                this._session.Dispose();
+                _session.Dispose();
                 throw;
             }
-            foreach (Action afterCommitCommand in this._afterCommitCommandQueue)
+            foreach (Action afterCommitCommand in _afterCommitCommandQueue)
                 afterCommitCommand();
         }
 
         public override void ExpireJob(string jobId, TimeSpan expireIn)
         {
-            this._session.SetExpiry<RavenJob>(this._storage.Repository.GetId(typeof(RavenJob), jobId), expireIn);
+            _session.SetExpiry<RavenJob>(_storage.Repository.GetId(typeof(RavenJob), jobId), expireIn);
         }
 
         public override void PersistJob(string jobId)
         {
-            this._session.RemoveExpiry<RavenJob>(this._storage.Repository.GetId(typeof(RavenJob), jobId));
+            _session.RemoveExpiry<RavenJob>(_storage.Repository.GetId(typeof(RavenJob), jobId));
         }
 
         public override void SetJobState(string jobId, IState state)
         {
-            RavenJob ravenJob = this._session.Load<RavenJob>(this._storage.Repository.GetId(typeof(RavenJob), jobId));
+            var ravenJob = _session.Load<RavenJob>(_storage.Repository.GetId(typeof(RavenJob), jobId));
             ravenJob.History.Insert(0, new StateHistoryDto()
             {
                 StateName = state.Name,
@@ -85,138 +85,138 @@ namespace Hangfire.Raven
             };
         }
 
-        public override void AddJobState(string jobId, IState state) => this.SetJobState(jobId, state);
+        public override void AddJobState(string jobId, IState state) => SetJobState(jobId, state);
 
         public override void AddRangeToSet(string key, IList<string> items)
         {
             key.ThrowIfNull(nameof(key));
             items.ThrowIfNull(nameof(items));
-            RavenSet orCreateSet = this.FindOrCreateSet(this._storage.Repository.GetId(typeof(RavenSet), key));
+            var orCreateSet = FindOrCreateSet(_storage.Repository.GetId(typeof(RavenSet), key));
             foreach (string key1 in (IEnumerable<string>)items)
                 orCreateSet.Scores[key1] = 0.0;
         }
 
         public override void AddToQueue(string queue, string jobId)
         {
-            IPersistentJobQueue jobQueue = this._storage.QueueProviders.GetProvider(queue).GetJobQueue();
+            IPersistentJobQueue jobQueue = _storage.QueueProviders.GetProvider(queue).GetJobQueue();
             jobQueue.Enqueue(queue, jobId);
             if (!(jobQueue.GetType() == typeof(RavenJobQueue)))
                 return;
-            this._afterCommitCommandQueue.Enqueue((Action)(() => RavenJobQueue.NewItemInQueueEvent.Set()));
+            _afterCommitCommandQueue.Enqueue((Action)(() => RavenJobQueue.NewItemInQueueEvent.Set()));
         }
 
         public override void IncrementCounter(string key)
         {
-            this.IncrementCounter(key, TimeSpan.MinValue);
+            IncrementCounter(key, TimeSpan.MinValue);
         }
 
         public override void IncrementCounter(string key, TimeSpan expireIn)
         {
-            this.UpdateCounter(key, expireIn, 1);
+            UpdateCounter(key, expireIn, 1);
         }
 
         public override void DecrementCounter(string key)
         {
-            this.DecrementCounter(key, TimeSpan.MinValue);
+            DecrementCounter(key, TimeSpan.MinValue);
         }
 
         public override void DecrementCounter(string key, TimeSpan expireIn)
         {
-            this.UpdateCounter(key, expireIn, -1);
+            UpdateCounter(key, expireIn, -1);
         }
 
         public void UpdateCounter(string key, TimeSpan expireIn, int value)
         {
-            string id = this._storage.Repository.GetId(typeof(Counter), key);
-            if (this._session.Load<Counter>(id) == null)
+            string id = _storage.Repository.GetId(typeof(Counter), key);
+            if (_session.Load<Counter>(id) == null)
             {
                 Counter entity = new Counter()
                 {
                     Id = id,
                     Value = value
                 };
-                this._session.Store((object)entity);
+                _session.Store((object)entity);
                 if (!(expireIn != TimeSpan.MinValue))
                     return;
-                this._session.SetExpiry<Counter>(entity, expireIn);
+                _session.SetExpiry<Counter>(entity, expireIn);
             }
             else
-                this._patchRequests.Add(new KeyValuePair<string, PatchRequest>(id, new PatchRequest()
+                _patchRequests.Add(new KeyValuePair<string, PatchRequest>(id, new PatchRequest()
                 {
-                    Script = string.Format("this.Value += {0}", (object)value)
+                    Script = string.Format("Value += {0}", (object)value)
                 }));
         }
 
-        public override void AddToSet(string key, string value) => this.AddToSet(key, value, 0.0);
+        public override void AddToSet(string key, string value) => AddToSet(key, value, 0.0);
 
         public override void AddToSet(string key, string value, double score)
         {
-            this.FindOrCreateSet(this._storage.Repository.GetId(typeof(RavenSet), key)).Scores[value] = score;
+            FindOrCreateSet(_storage.Repository.GetId(typeof(RavenSet), key)).Scores[value] = score;
         }
 
         public override void RemoveFromSet(string key, string value)
         {
             key.ThrowIfNull(nameof(key));
-            RavenSet orCreateSet = this.FindOrCreateSet(this._storage.Repository.GetId(typeof(RavenSet), key));
+            RavenSet orCreateSet = FindOrCreateSet(_storage.Repository.GetId(typeof(RavenSet), key));
             orCreateSet.Scores.Remove(value);
             if (orCreateSet.Scores.Count != 0)
                 return;
-            this._session.Delete<RavenSet>(orCreateSet);
+            _session.Delete<RavenSet>(orCreateSet);
         }
 
         public override void RemoveSet(string key)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.Delete(this._storage.Repository.GetId(typeof(RavenSet), key));
+            _session.Delete(_storage.Repository.GetId(typeof(RavenSet), key));
         }
 
         public override void ExpireSet([NotNull] string key, TimeSpan expireIn)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.SetExpiry<RavenSet>(this.FindOrCreateSet(this._storage.Repository.GetId(typeof(RavenSet), key)), expireIn);
+            _session.SetExpiry<RavenSet>(FindOrCreateSet(_storage.Repository.GetId(typeof(RavenSet), key)), expireIn);
         }
 
         public override void PersistSet([NotNull] string key)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.RemoveExpiry<RavenSet>(this.FindOrCreateSet(this._storage.Repository.GetId(typeof(RavenSet), key)));
+            _session.RemoveExpiry<RavenSet>(FindOrCreateSet(_storage.Repository.GetId(typeof(RavenSet), key)));
         }
 
         public override void InsertToList(string key, string value)
         {
             key.ThrowIfNull(nameof(key));
-            this.FindOrCreateList(this._storage.Repository.GetId(typeof(RavenList), key)).Values.Add(value);
+            FindOrCreateList(_storage.Repository.GetId(typeof(RavenList), key)).Values.Add(value);
         }
 
         public override void RemoveFromList(string key, string value)
         {
             key.ThrowIfNull(nameof(key));
-            RavenList orCreateList = this.FindOrCreateList(this._storage.Repository.GetId(typeof(RavenList), key));
+            RavenList orCreateList = FindOrCreateList(_storage.Repository.GetId(typeof(RavenList), key));
             orCreateList.Values.RemoveAll((Predicate<string>)(v => v == value));
             if (orCreateList.Values.Count != 0)
                 return;
-            this._session.Delete<RavenList>(orCreateList);
+            _session.Delete<RavenList>(orCreateList);
         }
 
         public override void TrimList(string key, int keepStartingFrom, int keepEndingAt)
         {
-            RavenList orCreateList = this.FindOrCreateList(this._storage.Repository.GetId(typeof(RavenList), key));
+            RavenList orCreateList = FindOrCreateList(_storage.Repository.GetId(typeof(RavenList), key));
             orCreateList.Values = orCreateList.Values.Skip<string>(keepStartingFrom).Take<string>(keepEndingAt - keepStartingFrom + 1).ToList<string>();
             if (orCreateList.Values.Count != 0)
                 return;
-            this._session.Delete<RavenList>(orCreateList);
+            _session.Delete<RavenList>(orCreateList);
         }
 
         public override void ExpireList(string key, TimeSpan expireIn)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.SetExpiry<RavenList>(this.FindOrCreateList(this._storage.Repository.GetId(typeof(RavenList), key)), expireIn);
+            _session.SetExpiry<RavenList>(FindOrCreateList(_storage.Repository.GetId(typeof(RavenList), key)), expireIn);
         }
 
         public override void PersistList(string key)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.RemoveExpiry<RavenList>(this.FindOrCreateList(this._storage.Repository.GetId(typeof(RavenList), key)));
+            _session.RemoveExpiry<RavenList>(FindOrCreateList(_storage.Repository.GetId(typeof(RavenList), key)));
         }
 
         public override void SetRangeInHash(
@@ -225,7 +225,7 @@ namespace Hangfire.Raven
         {
             key.ThrowIfNull(nameof(key));
             keyValuePairs.ThrowIfNull(nameof(keyValuePairs));
-            RavenHash orCreateHash = this.FindOrCreateHash(this._storage.Repository.GetId(typeof(RavenHash), key));
+            RavenHash orCreateHash = FindOrCreateHash(_storage.Repository.GetId(typeof(RavenHash), key));
             foreach (KeyValuePair<string, string> keyValuePair in keyValuePairs)
                 orCreateHash.Fields[keyValuePair.Key] = keyValuePair.Value;
         }
@@ -233,24 +233,24 @@ namespace Hangfire.Raven
         public override void RemoveHash(string key)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.Delete(this._storage.Repository.GetId(typeof(RavenHash), key));
+            _session.Delete(_storage.Repository.GetId(typeof(RavenHash), key));
         }
 
         public override void ExpireHash(string key, TimeSpan expireIn)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.SetExpiry<RavenHash>(this.FindOrCreateHash(this._storage.Repository.GetId(typeof(RavenHash), key)), expireIn);
+            _session.SetExpiry<RavenHash>(FindOrCreateHash(_storage.Repository.GetId(typeof(RavenHash), key)), expireIn);
         }
 
         public override void PersistHash([NotNull] string key)
         {
             key.ThrowIfNull(nameof(key));
-            this._session.RemoveExpiry<RavenHash>(this.FindOrCreateHash(this._storage.Repository.GetId(typeof(RavenHash), key)));
+            _session.RemoveExpiry<RavenHash>(FindOrCreateHash(_storage.Repository.GetId(typeof(RavenHash), key)));
         }
 
         private RavenSet FindOrCreateSet(string id)
         {
-            return this.FindOrCreate<RavenSet>(id, (Func<RavenSet>)(() => new RavenSet()
+            return FindOrCreate<RavenSet>(id, (Func<RavenSet>)(() => new RavenSet()
             {
                 Id = id
             }));
@@ -258,7 +258,7 @@ namespace Hangfire.Raven
 
         private RavenHash FindOrCreateHash(string id)
         {
-            return this.FindOrCreate<RavenHash>(id, (Func<RavenHash>)(() => new RavenHash()
+            return FindOrCreate<RavenHash>(id, (Func<RavenHash>)(() => new RavenHash()
             {
                 Id = id
             }));
@@ -266,7 +266,7 @@ namespace Hangfire.Raven
 
         private RavenList FindOrCreateList(string id)
         {
-            return this.FindOrCreate<RavenList>(id, (Func<RavenList>)(() => new RavenList()
+            return FindOrCreate<RavenList>(id, (Func<RavenList>)(() => new RavenList()
             {
                 Id = id
             }));
@@ -274,11 +274,11 @@ namespace Hangfire.Raven
 
         private T FindOrCreate<T>(string id, Func<T> builder)
         {
-            T entity = this._session.Load<T>(id);
+            T entity = _session.Load<T>(id);
             if ((object)entity == null)
             {
                 entity = builder();
-                this._session.Store((object)entity);
+                _session.Store((object)entity);
             }
             return entity;
         }
