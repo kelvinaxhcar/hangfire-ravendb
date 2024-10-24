@@ -25,8 +25,8 @@ namespace Hangfire.Raven.JobQueues
         {
             storage.ThrowIfNull(nameof(storage));
             options.ThrowIfNull(nameof(options));
-            this._storage = storage;
-            this._options = options;
+            _storage = storage;
+            _options = options;
         }
 
         [NotNull]
@@ -37,11 +37,11 @@ namespace Hangfire.Raven.JobQueues
             if (queues.Length == 0)
                 throw new ArgumentException("Queue array must be non-empty.", nameof(queues));
 
-            Expression<Func<JobQueue, bool>>[] expressionArray = new Expression<Func<JobQueue, bool>>[]
-            {
+            Expression<Func<JobQueue, bool>>[] expressionArray =
+            [
         job => job.FetchedAt == null,
         job => job.FetchedAt < DateTime.UtcNow.AddSeconds(-_options.InvisibilityTimeout.TotalSeconds)
-            };
+            ];
 
             int index = 0;
 
@@ -55,7 +55,7 @@ namespace Hangfire.Raven.JobQueues
                 {
                     documentSession.Advanced.UseOptimisticConcurrency = true;
 
-                    lock (RavenJobQueue._lockObject)
+                    lock (_lockObject)
                     {
                         foreach (string queue in queues)
                         {
@@ -91,7 +91,7 @@ namespace Hangfire.Raven.JobQueues
                     WaitHandle.WaitAny(new WaitHandle[]
                     {
                 cancellationToken.WaitHandle,
-                RavenJobQueue.NewItemInQueueEvent
+                NewItemInQueueEvent
                     }, _options.QueuePollInterval);
 
                     cancellationToken.ThrowIfCancellationRequested();
@@ -102,11 +102,11 @@ namespace Hangfire.Raven.JobQueues
 
         public void Enqueue(string queue, string jobId)
         {
-            using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+            using (IDocumentSession documentSession = _storage.Repository.OpenSession())
             {
                 JobQueue entity = new JobQueue()
                 {
-                    Id = this._storage.Repository.GetId(typeof(JobQueue), queue, jobId),
+                    Id = _storage.Repository.GetId(typeof(JobQueue), queue, jobId),
                     JobId = jobId,
                     Queue = queue
                 };

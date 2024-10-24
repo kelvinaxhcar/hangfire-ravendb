@@ -29,15 +29,15 @@ namespace Hangfire.Raven.Storage
         {
             repository.ThrowIfNull(nameof(repository));
             options.ThrowIfNull(nameof(options));
-            this._options = options;
-            this._repository = repository;
-            this._repository.Create();
-            this.InitializeQueueProviders();
+            _options = options;
+            _repository = repository;
+            _repository.Create();
+            InitializeQueueProviders();
         }
 
-        public RavenStorageOptions Options => this._options;
+        public RavenStorageOptions Options => _options;
 
-        public IRepository Repository => this._repository;
+        public IRepository Repository => _repository;
 
         public virtual PersistentJobQueueProviderCollection QueueProviders { get; private set; }
 
@@ -58,7 +58,7 @@ namespace Hangfire.Raven.Storage
 
         private void InitializeQueueProviders()
         {
-            this.QueueProviders = new PersistentJobQueueProviderCollection((IPersistentJobQueueProvider)new RavenJobQueueProvider(this, this._options));
+            QueueProviders = new PersistentJobQueueProviderCollection((IPersistentJobQueueProvider)new RavenJobQueueProvider(this, _options));
         }
     }
 }

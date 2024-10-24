@@ -25,38 +25,38 @@ namespace Hangfire.Raven
             };
             documentStore.Database = config.Database;
             documentStore.Certificate = config.Certificate;
-            this._documentStore = documentStore;
-            this._documentStore.Initialize();
-            this._database = this._documentStore.Database;
+            _documentStore = documentStore;
+            _documentStore.Initialize();
+            _database = _documentStore.Database;
         }
 
         public void ExecuteIndexes(List<AbstractIndexCreationTask> indexes)
         {
-            this._documentStore.ExecuteIndexes((IEnumerable<IAbstractIndexCreationTask>)indexes, (string)null);
+            _documentStore.ExecuteIndexes((IEnumerable<IAbstractIndexCreationTask>)indexes, (string)null);
         }
 
         public void Destroy()
         {
-            if (this._database == null || !this._documentStore.DatabaseExists(this._database))
+            if (_database == null || !_documentStore.DatabaseExists(_database))
                 return;
-            this._documentStore.Maintenance.Server.Send<DeleteDatabaseResult>((IServerOperation<DeleteDatabaseResult>)new DeleteDatabasesOperation(this._database, true));
+            _documentStore.Maintenance.Server.Send<DeleteDatabaseResult>((IServerOperation<DeleteDatabaseResult>)new DeleteDatabasesOperation(_database, true));
         }
 
         public void Create()
         {
-            if (this._database == null || this._documentStore.DatabaseExists(this._database))
+            if (_database == null || _documentStore.DatabaseExists(_database))
                 return;
-            this._documentStore.Maintenance.Server.Send<DatabasePutResult>((IServerOperation<DatabasePutResult>)new CreateDatabaseOperation(new DatabaseRecord(this._database)));
-            this._documentStore.Maintenance.Send<ConfigureExpirationOperationResult>((IMaintenanceOperation<ConfigureExpirationOperationResult>)new ConfigureExpirationOperation(new ExpirationConfiguration()
+            _documentStore.Maintenance.Server.Send<DatabasePutResult>((IServerOperation<DatabasePutResult>)new CreateDatabaseOperation(new DatabaseRecord(_database)));
+            _documentStore.Maintenance.Send<ConfigureExpirationOperationResult>((IMaintenanceOperation<ConfigureExpirationOperationResult>)new ConfigureExpirationOperation(new ExpirationConfiguration()
             {
                 Disabled = false,
                 DeleteFrequencyInSec = new long?(60L)
             }));
         }
 
-        public void Dispose() => this._documentStore.Dispose();
+        public void Dispose() => _documentStore.Dispose();
 
-        IDocumentSession IRepository.OpenSession() => this._documentStore.OpenSession();
+        IDocumentSession IRepository.OpenSession() => _documentStore.OpenSession();
 
         public string GetId(Type type, params string[] id)
         {

@@ -22,7 +22,7 @@ namespace Hangfire.Raven
         public RavenConnection(RavenStorage storage)
         {
             storage.ThrowIfNull(nameof(storage));
-            this._storage = storage;
+            _storage = storage;
         }
 
         public override IWriteOnlyTransaction CreateWriteTransaction()
@@ -57,12 +57,12 @@ namespace Hangfire.Raven
             var expiredJob = Guid.NewGuid().ToString();
             var entity = new RavenJob()
             {
-                Id = this._storage.Repository.GetId(typeof(RavenJob), expiredJob),
+                Id = _storage.Repository.GetId(typeof(RavenJob), expiredJob),
                 InvocationData = invocationData,
                 CreatedAt = createdAt,
                 Parameters = parameters
             };
-            using (IDocumentSession session = this._storage.Repository.OpenSession())
+            using (IDocumentSession session = _storage.Repository.OpenSession())
             {
                 session.Store((object)entity);
                 session.SetExpiry<RavenJob>(entity, createdAt + expireIn);
@@ -152,7 +152,7 @@ namespace Hangfire.Raven
             if (toScore < fromScore)
                 throw new ArgumentException("The `toScore` value must be higher or equal to the `fromScore` value.");
             using var documentSession = _storage.Repository.OpenSession();
-            string id = this._storage.Repository.GetId(typeof(RavenSet), key);
+            string id = _storage.Repository.GetId(typeof(RavenSet), key);
             var ravenSet = documentSession.Load<RavenSet>(id);
             return ravenSet?.Scores.Where(a => a.Value >= fromScore && a.Value <= toScore)
                                    .OrderBy(a => a.Value)
@@ -167,7 +167,7 @@ namespace Hangfire.Raven
             key.ThrowIfNull(nameof(key));
             keyValuePairs.ThrowIfNull(nameof(keyValuePairs));
             using var documentSession = _storage.Repository.OpenSession();
-            var id = this._storage.Repository.GetId(typeof(RavenHash), key);
+            var id = _storage.Repository.GetId(typeof(RavenHash), key);
             var entity = documentSession.Load<RavenHash>(id);
             if (entity == null)
             {
@@ -190,8 +190,8 @@ namespace Hangfire.Raven
         {
             serverId.ThrowIfNull(nameof(serverId));
             context.ThrowIfNull(nameof(context));
-            using var documentSession = this._storage.Repository.OpenSession();
-            var id = this._storage.Repository.GetId(typeof(RavenServer), serverId);
+            using var documentSession = _storage.Repository.OpenSession();
+            var id = _storage.Repository.GetId(typeof(RavenServer), serverId);
             var entity = documentSession.Load<RavenServer>(id);
             if (entity == null)
             {
@@ -216,7 +216,7 @@ namespace Hangfire.Raven
         {
             serverId.ThrowIfNull(nameof(serverId));
             using var documentSession = _storage.Repository.OpenSession();
-            var id = this._storage.Repository.GetId(typeof(RavenServer), serverId);
+            var id = _storage.Repository.GetId(typeof(RavenServer), serverId);
             documentSession.Delete(id);
             documentSession.SaveChanges();
         }
@@ -312,7 +312,7 @@ namespace Hangfire.Raven
         {
             key.ThrowIfNull(nameof(key));
             name.ThrowIfNull(nameof(name));
-            using var documentSession = this._storage.Repository.OpenSession();
+            using var documentSession = _storage.Repository.OpenSession();
             var ravenHash = documentSession.Load<RavenHash>(_storage.Repository.GetId(typeof(RavenHash), key));
             return ravenHash == null || !ravenHash.Fields.TryGetValue(name, out string str) ? null : str;
         }

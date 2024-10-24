@@ -24,7 +24,7 @@ namespace Hangfire.Raven.DistributedLocks
         private bool _completed;
         private readonly object _lockObject = new object();
 
-        private string EventWaitHandleName => this.GetType().FullName + "." + this._resource;
+        private string EventWaitHandleName => GetType().FullName + "." + _resource;
 
         public RavenDistributedLock(
           RavenStorage storage,
@@ -38,38 +38,38 @@ namespace Hangfire.Raven.DistributedLocks
             if (timeout.TotalSeconds > (double)int.MaxValue)
                 throw new ArgumentException(string.Format("The timeout specified is too large. Please supply a timeout equal to or less than {0} seconds", (object)int.MaxValue), nameof(timeout));
             options.ThrowIfNull(nameof(options));
-            this._storage = storage;
-            this._resource = resource;
-            this._options = options;
-            if (!RavenDistributedLock.AcquiredLocks.Value.ContainsKey(this._resource) || RavenDistributedLock.AcquiredLocks.Value[this._resource] == 0)
+            _storage = storage;
+            _resource = resource;
+            _options = options;
+            if (!RavenDistributedLock.AcquiredLocks.Value.ContainsKey(_resource) || RavenDistributedLock.AcquiredLocks.Value[_resource] == 0)
             {
-                this.Acquire(timeout);
-                RavenDistributedLock.AcquiredLocks.Value[this._resource] = 1;
-                this.StartHeartBeat();
+                Acquire(timeout);
+                RavenDistributedLock.AcquiredLocks.Value[_resource] = 1;
+                StartHeartBeat();
             }
             else
-                RavenDistributedLock.AcquiredLocks.Value[this._resource]++;
+                RavenDistributedLock.AcquiredLocks.Value[_resource]++;
         }
 
         public void Dispose()
         {
-            if (this._completed)
+            if (_completed)
                 return;
-            this._completed = true;
-            if (!RavenDistributedLock.AcquiredLocks.Value.ContainsKey(this._resource))
+            _completed = true;
+            if (!RavenDistributedLock.AcquiredLocks.Value.ContainsKey(_resource))
                 return;
-            RavenDistributedLock.AcquiredLocks.Value[this._resource]--;
-            if (RavenDistributedLock.AcquiredLocks.Value[this._resource] > 0)
+            RavenDistributedLock.AcquiredLocks.Value[_resource]--;
+            if (RavenDistributedLock.AcquiredLocks.Value[_resource] > 0)
                 return;
-            lock (this._lockObject)
+            lock (_lockObject)
             {
-                RavenDistributedLock.AcquiredLocks.Value.Remove(this._resource);
-                if (this._heartbeatTimer != null)
+                RavenDistributedLock.AcquiredLocks.Value.Remove(_resource);
+                if (_heartbeatTimer != null)
                 {
-                    this._heartbeatTimer.Dispose();
-                    this._heartbeatTimer = (Timer)null;
+                    _heartbeatTimer.Dispose();
+                    _heartbeatTimer = (Timer)null;
                 }
-                this.Release();
+                Release();
             }
         }
 
@@ -81,16 +81,16 @@ namespace Hangfire.Raven.DistributedLocks
                 int millisecondsTimeout = timeout.TotalMilliseconds > 10000.0 ? 2000 : (int)(timeout.TotalMilliseconds / 5.0);
                 while (dateTime >= DateTime.Now)
                 {
-                    this._distributedLock = new DistributedLock()
+                    _distributedLock = new DistributedLock()
                     {
-                        ClientId = this._storage.Options.ClientId,
-                        Resource = this._resource
+                        ClientId = _storage.Options.ClientId,
+                        Resource = _resource
                     };
-                    using (IDocumentSession session = this._storage.Repository.OpenSession())
+                    using (IDocumentSession session = _storage.Repository.OpenSession())
                     {
                         session.Advanced.UseOptimisticConcurrency = false;
-                        session.Store((object)this._distributedLock);
-                        session.SetExpiry<DistributedLock>(this._distributedLock, this._options.DistributedLockLifetime);
+                        session.Store((object)_distributedLock);
+                        session.SetExpiry<DistributedLock>(_distributedLock, _options.DistributedLockLifetime);
                         try
                         {
                             session.SaveChanges();
@@ -98,10 +98,10 @@ namespace Hangfire.Raven.DistributedLocks
                         }
                         catch (ConcurrencyException ex1)
                         {
-                            this._distributedLock = (DistributedLock)null;
+                            _distributedLock = (DistributedLock)null;
                             try
                             {
-                                new EventWaitHandle(false, EventResetMode.AutoReset, this.EventWaitHandleName).WaitOne(millisecondsTimeout);
+                                new EventWaitHandle(false, EventResetMode.AutoReset, EventWaitHandleName).WaitOne(millisecondsTimeout);
                             }
                             catch (PlatformNotSupportedException ex2)
                             {
@@ -110,7 +110,7 @@ namespace Hangfire.Raven.DistributedLocks
                         }
                     }
                 }
-                throw new DistributedLockTimeoutException(this._resource);
+                throw new DistributedLockTimeoutException(_resource);
             }
             catch (DistributedLockTimeoutException ex)
             {
@@ -118,7 +118,7 @@ namespace Hangfire.Raven.DistributedLocks
             }
             catch (Exception ex)
             {
-                throw new RavenDistributedLockException("Could not place a lock on the resource '" + this._resource + "': Check inner exception for details.", ex);
+                throw new RavenDistributedLockException("Could not place a lock on the resource '" + _resource + "': Check inner exception for details.", ex);
             }
         }
 
@@ -126,17 +126,17 @@ namespace Hangfire.Raven.DistributedLocks
         {
             try
             {
-                if (this._distributedLock != null)
+                if (_distributedLock != null)
                 {
-                    using (IDocumentSession documentSession = this._storage.Repository.OpenSession())
+                    using (IDocumentSession documentSession = _storage.Repository.OpenSession())
                     {
-                        documentSession.Delete(this._distributedLock.Id);
+                        documentSession.Delete(_distributedLock.Id);
                         documentSession.SaveChanges();
-                        this._distributedLock = (DistributedLock)null;
+                        _distributedLock = (DistributedLock)null;
                     }
                 }
                 EventWaitHandle result;
-                if (!EventWaitHandle.TryOpenExisting(this.EventWaitHandleName, out result))
+                if (!EventWaitHandle.TryOpenExisting(EventWaitHandleName, out result))
                     return;
                 result.Set();
             }
@@ -145,31 +145,31 @@ namespace Hangfire.Raven.DistributedLocks
             }
             catch (Exception ex)
             {
-                this._distributedLock = (DistributedLock)null;
-                throw new RavenDistributedLockException("Could not release a lock on the resource '" + this._resource + "': Check inner exception for details.", ex);
+                _distributedLock = (DistributedLock)null;
+                throw new RavenDistributedLockException("Could not release a lock on the resource '" + _resource + "': Check inner exception for details.", ex);
             }
         }
 
         private void StartHeartBeat()
         {
-            RavenDistributedLock.Logger.InfoFormat(".Starting heartbeat for resource: {0}", (object)this._resource);
-            this._heartbeatTimer = new Timer((TimerCallback)(state =>
+            RavenDistributedLock.Logger.InfoFormat(".Starting heartbeat for resource: {0}", (object)_resource);
+            _heartbeatTimer = new Timer((TimerCallback)(state =>
             {
-                lock (this._lockObject)
+                lock (_lockObject)
                 {
                     try
                     {
-                        RavenDistributedLock.Logger.InfoFormat("..Heartbeat for resource {0}", (object)this._resource);
-                        using (IDocumentSession session = this._storage.Repository.OpenSession())
+                        RavenDistributedLock.Logger.InfoFormat("..Heartbeat for resource {0}", (object)_resource);
+                        using (IDocumentSession session = _storage.Repository.OpenSession())
                         {
-                            IDocumentSessionExtensions.SetExpiry<string>(session, this._distributedLock.Id, this._options.DistributedLockLifetime);
+                            IDocumentSessionExtensions.SetExpiry<string>(session, _distributedLock.Id, _options.DistributedLockLifetime);
                             session.SaveChanges();
                         }
                     }
                     catch (Exception ex)
                     {
-                        RavenDistributedLock.Logger.ErrorFormat("...Unable to update heartbeat on the resource '{0}'. {1}", (object)this._resource, (object)ex);
-                        this.Release();
+                        RavenDistributedLock.Logger.ErrorFormat("...Unable to update heartbeat on the resource '{0}'. {1}", (object)_resource, (object)ex);
+                        Release();
                     }
                 }
             }), (object)null, RavenDistributedLock.KeepAliveInterval, RavenDistributedLock.KeepAliveInterval);

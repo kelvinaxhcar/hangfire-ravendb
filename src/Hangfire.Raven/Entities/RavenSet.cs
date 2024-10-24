@@ -4,7 +4,7 @@ namespace Hangfire.Raven.Entities
 {
     public class RavenSet
     {
-        public RavenSet() => this.Scores = new Dictionary<string, double>();
+        public RavenSet() => Scores = new Dictionary<string, double>();
 
         public string Id { get; set; }
 
