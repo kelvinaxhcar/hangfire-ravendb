@@ -6,7 +6,10 @@ namespace Hangfire.Raven
     {
         private Action<T> _action;
 
-        public RepositoryObserver(Action<T> input) => _action = input;
+        public RepositoryObserver(Action<T> input)
+        {
+            _action = input;
+        }
 
         public void OnCompleted()
         {

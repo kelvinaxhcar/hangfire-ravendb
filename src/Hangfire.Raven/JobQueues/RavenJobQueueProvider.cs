@@ -13,8 +13,8 @@ namespace Hangfire.Raven.JobQueues
         {
             storage.ThrowIfNull(nameof(storage));
             options.ThrowIfNull(nameof(options));
-            _jobQueue = (IPersistentJobQueue)new RavenJobQueue(storage, options);
-            _monitoringApi = (IPersistentJobQueueMonitoringApi)new RavenJobQueueMonitoringApi(storage);
+            _jobQueue = new RavenJobQueue(storage, options);
+            _monitoringApi = new RavenJobQueueMonitoringApi(storage);
         }
 
         public IPersistentJobQueue GetJobQueue() => _jobQueue;

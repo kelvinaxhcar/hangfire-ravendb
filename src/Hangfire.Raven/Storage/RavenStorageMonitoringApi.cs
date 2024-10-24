@@ -96,8 +96,9 @@ namespace Hangfire.Raven.Storage
 
         public StatisticsDto GetStatistics()
         {
-            var session = _storage.Repository.OpenSession();
+            using var session = _storage.Repository.OpenSession();
 
+            //TODO
             session.Query<RavenServer>()
                    .Statistics(out var stats)
                    .Take(0)

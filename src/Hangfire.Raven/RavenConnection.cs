@@ -39,7 +39,7 @@ namespace Hangfire.Raven
         {
             if (queues == null || queues.Length == 0)
                 throw new ArgumentNullException(nameof(queues));
-            IPersistentJobQueueProvider[] array = queues.Select(_storage.QueueProviders.GetProvider).Distinct().ToArray();
+            var array = queues.Select(_storage.QueueProviders.GetProvider).Distinct().ToArray();
             if (array.Length != 1)
                 throw new InvalidOperationException("Multiple provider instances registered for queues: " + string.Join(", ", queues) + ". You should choose only one type of persistent queues per server instance.");
             return array[0].GetJobQueue().Dequeue(queues, cancellationToken);
@@ -64,8 +64,8 @@ namespace Hangfire.Raven
             };
             using (IDocumentSession session = _storage.Repository.OpenSession())
             {
-                session.Store((object)entity);
-                session.SetExpiry<RavenJob>(entity, createdAt + expireIn);
+                session.Store(entity);
+                session.SetExpiry(entity, createdAt + expireIn);
                 session.SaveChanges();
                 return expiredJob;
             }

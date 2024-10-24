@@ -1,7 +1,6 @@
 ﻿using Hangfire.Raven.Extensions;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
-using Raven.Client.Documents.Operations;
 using Raven.Client.Documents.Operations.Expiration;
 using Raven.Client.Documents.Session;
 using Raven.Client.ServerWide;
@@ -32,22 +31,22 @@ namespace Hangfire.Raven
 
         public void ExecuteIndexes(List<AbstractIndexCreationTask> indexes)
         {
-            _documentStore.ExecuteIndexes((IEnumerable<IAbstractIndexCreationTask>)indexes, (string)null);
+            _documentStore.ExecuteIndexes(indexes, null);
         }
 
         public void Destroy()
         {
             if (_database == null || !_documentStore.DatabaseExists(_database))
                 return;
-            _documentStore.Maintenance.Server.Send<DeleteDatabaseResult>((IServerOperation<DeleteDatabaseResult>)new DeleteDatabasesOperation(_database, true));
+            _documentStore.Maintenance.Server.Send(new DeleteDatabasesOperation(_database, true));
         }
 
         public void Create()
         {
             if (_database == null || _documentStore.DatabaseExists(_database))
                 return;
-            _documentStore.Maintenance.Server.Send<DatabasePutResult>((IServerOperation<DatabasePutResult>)new CreateDatabaseOperation(new DatabaseRecord(_database)));
-            _documentStore.Maintenance.Send<ConfigureExpirationOperationResult>((IMaintenanceOperation<ConfigureExpirationOperationResult>)new ConfigureExpirationOperation(new ExpirationConfiguration()
+            _documentStore.Maintenance.Server.Send(new CreateDatabaseOperation(new DatabaseRecord(_database)));
+            _documentStore.Maintenance.Send(new ConfigureExpirationOperation(new ExpirationConfiguration()
             {
                 Disabled = false,
                 DeleteFrequencyInSec = new long?(60L)

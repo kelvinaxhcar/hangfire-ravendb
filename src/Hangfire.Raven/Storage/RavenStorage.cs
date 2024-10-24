@@ -16,7 +16,7 @@ namespace Hangfire.Raven.Storage
         }
 
         public RavenStorage(RepositoryConfig config, RavenStorageOptions options)
-          : this((IRepository)new Hangfire.Raven.Repository(config), options)
+          : this(new Repository(config), options)
         {
         }
 
@@ -43,12 +43,12 @@ namespace Hangfire.Raven.Storage
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            return (IMonitoringApi)new RavenStorageMonitoringApi(this);
+            return new RavenStorageMonitoringApi(this);
         }
 
         public override IStorageConnection GetConnection()
         {
-            return (IStorageConnection)new RavenConnection(this);
+            return new RavenConnection(this);
         }
 
         public override void WriteOptionsToLog(ILog logger)
@@ -58,7 +58,7 @@ namespace Hangfire.Raven.Storage
 
         private void InitializeQueueProviders()
         {
-            QueueProviders = new PersistentJobQueueProviderCollection((IPersistentJobQueueProvider)new RavenJobQueueProvider(this, _options));
+            QueueProviders = new PersistentJobQueueProviderCollection(new RavenJobQueueProvider(this, _options));
         }
     }
 }

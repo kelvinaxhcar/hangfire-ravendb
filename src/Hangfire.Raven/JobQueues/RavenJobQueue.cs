@@ -39,8 +39,8 @@ namespace Hangfire.Raven.JobQueues
 
             Expression<Func<JobQueue, bool>>[] expressionArray =
             [
-        job => job.FetchedAt == null,
-        job => job.FetchedAt < DateTime.UtcNow.AddSeconds(-_options.InvisibilityTimeout.TotalSeconds)
+                job => job.FetchedAt == null,
+                job => job.FetchedAt < DateTime.UtcNow.AddSeconds(-_options.InvisibilityTimeout.TotalSeconds)
             ];
 
             int index = 0;

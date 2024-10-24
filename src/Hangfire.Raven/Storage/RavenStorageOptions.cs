@@ -5,7 +5,7 @@ namespace Hangfire.Raven.Storage
 {
     public class RavenStorageOptions
     {
-        private readonly string _clientId = (string)null;
+        private readonly string _clientId = null;
         private TimeSpan _queuePollInterval;
         private TimeSpan _distributedLockLifetime;
 
@@ -25,7 +25,7 @@ namespace Hangfire.Raven.Storage
             get => _queuePollInterval;
             set
             {
-                string message = string.Format("The QueuePollInterval property value should be positive. Given: {0}.", (object)value);
+                var message = string.Format("The QueuePollInterval property value should be positive. Given: {0}.", value);
                 if (value == TimeSpan.Zero)
                     throw new ArgumentException(message, nameof(value));
                 _queuePollInterval = !(value != value.Duration()) ? value : throw new ArgumentException(message, nameof(value));
@@ -45,7 +45,7 @@ namespace Hangfire.Raven.Storage
             get => _distributedLockLifetime;
             set
             {
-                string message = string.Format("The DistributedLockLifetime property value should be positive. Given: {0}.", (object)value);
+                var message = string.Format("The DistributedLockLifetime property value should be positive. Given: {0}.", value);
                 if (value == TimeSpan.Zero)
                     throw new ArgumentException(message, nameof(value));
                 _distributedLockLifetime = !(value != value.Duration()) ? value : throw new ArgumentException(message, nameof(value));
