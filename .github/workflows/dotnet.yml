@@ -27,5 +27,6 @@ jobs:
     - name: Push no NuGet
       run: |
         cd src
+        cd Hangfire.Raven
         cd out
         dotnet nuget push *.nupkg --api-key ${{ secrets.HANGFIRE_RAVEN_6X_DB_NUGET }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
