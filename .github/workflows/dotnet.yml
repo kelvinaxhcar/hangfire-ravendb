@@ -5,30 +5,27 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: 7.0.x
-    - name: Restore dependencies
-      run: |
-        cd src
-        cd Hangfire.Raven
-        dotnet restore
-      
-    - name: Geração do pacote
-      run: |
-        cd src
-        cd Hangfire.Raven
-        dotnet build -c Release -o out
-    
-    - name: Push no NuGet
-      run: |
-        cd src
-        cd Hangfire.Raven
-        cd out
-        dotnet nuget push *.nupkg --api-key ${{ secrets.HANGFIRE_RAVEN_6X_DB_NUGET }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+      - uses: actions/checkout@v2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 8.0.x  # Atualizado para .NET 8.0
+
+      - name: Restore dependencies
+        run: |
+          cd src/Hangfire.Raven
+          dotnet restore
+
+      - name: Build the package
+        run: |
+          cd src/Hangfire.Raven
+          dotnet build -c Release -o out
+
+      - name: Push to NuGet
+        run: |
+          cd src/Hangfire.Raven/out
+          dotnet nuget push *.nupkg --api-key ${{ secrets.HANGFIRE_RAVEN_6X_DB_NUGET }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
