@@ -17,6 +17,7 @@ jobs:
     - name: Restore dependencies
       run: |
         cd src
+        cd Hangfire.Raven
         dotnet restore
       
     - name: Geração do pacote
