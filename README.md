@@ -3,9 +3,6 @@
 ## Build Status
 
 `Platform` | `Master`
---- | ---
-**Windows** | [![Build status](https://ci.appveyor.com/api/projects/status/hcmu0b0p62mbuwen?svg=true)](https://ci.appveyor.com/project/CadyIO/hangfire-ravendb)
-**Linux / OS X** | [![Travis CI Build Status](https://travis-ci.org/CadyIO/hangfire-ravendb.svg?branch=master)](https://travis-ci.org/CadyIO/hangfire-ravendb)
 
 ## Overview
 
@@ -57,7 +54,7 @@ BackgroundJob.ContinueWith(id, () => Console.WriteLine("world!"));
 
 ## License
 
-Copyright © 2013-2014 Sergey Odinokov.
+Copyright © 2013-2024 Sergey Odinokov.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
@@ -74,4 +71,4 @@ along with this program.  If not, see [http://www.gnu.org/licenses/](http://www.
 
 ## Known Bugs
 
-Hangfire.Tests requires RavenDB.Client which requires .Net 4.5. Until RavenDB 4.0 is released, Hangfire.Tests cannot be included and run.
+Hangfire.Tests requires RavenDB.Client which requires .Net 8.0. Until RavenDB 6.0 is released, Hangfire.Tests cannot be included and run.
