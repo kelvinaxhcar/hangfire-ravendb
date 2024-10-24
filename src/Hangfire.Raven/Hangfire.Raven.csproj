@@ -13,12 +13,13 @@
 		<Company>KelvinAxhcar</Company>
 		<Copyright>Copyright @ KelvinAxhcar</Copyright>
 		<PackageLicenseUrl>http://www.gnu.org/licenses/lgpl-3.0.html</PackageLicenseUrl>
-		<PackageProjectUrl>https://github.com/CadyIO/hangfire-ravendb</PackageProjectUrl>
+		<PackageProjectUrl>https://github.com/kelvinaxhcar/hangfire-ravendb</PackageProjectUrl>
 		<PackageIconUrl>https://avatars2.githubusercontent.com/u/7880472?v=3&amp;s=200</PackageIconUrl>
 		<PackageId>Hangfire.Raven</PackageId>
 		<PackageTags>Hangfire;AspNet;MVC;OWIN;RavenDB;Long-Running;Background;Fire-And-Forget;Delayed;Recurring;Tasks;Jobs;Scheduler;Threading;Queues</PackageTags>
 		<RepositoryType>git</RepositoryType>
-		<RepositoryUrl>https://github.com/CadyIO/hangfire-ravendb</RepositoryUrl>
+		<RepositoryUrl>https://github.com/kelvinaxhcar/hangfire-ravendb</RepositoryUrl>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 	</PropertyGroup>
 
 	<ItemGroup>
