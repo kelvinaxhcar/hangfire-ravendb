@@ -12,8 +12,7 @@ namespace Hangfire.Raven.Samples.Console
             try {
                 // you can use Raven Storage and specify the connection string name
                 GlobalConfiguration.Configuration
-                    .UseColouredConsoleLogProvider()
-                    .UseRavenStorage("RavenDebug");
+                    .UseColouredConsoleLogProvider();
 
                 // you can use Raven Storage and specify the connection string and database name
                 //GlobalConfiguration.Configuration

@@ -106,10 +106,16 @@ namespace Hangfire.Raven.Storage
             var recurringJobsSet = session.Load<RavenSet>(
                 _storage.Repository.GetId(typeof(RavenSet), "recurring-jobs"));
 
-            var jobStateCounts = session.Query<RavenJob>()
-                                      .GroupBy(x => x.StateData.Name)
-                                      .Select(x => new { State = x.Key, Count = x.Count() })
-                                      .ToDictionary(x => x.State, x => x.Count);
+            //TODO 
+            var jobs = session.Query<RavenJob>().ToList(); // Executa a query no RavenDB
+
+            var jobStateCounts = jobs
+                                .Where(x => x.StateData != null) // Evita StateData nulo
+                                .GroupBy(x => x.StateData.Name ?? "Unknown") // Substitui nulos após trazer os dados
+                                .Select(x => new { State = x.Key, Count = x.Count() })
+                                .ToDictionary(x => x.State, x => x.Count);
+
+
 
             var queueCount = session.Query<JobQueue>().Count();
 

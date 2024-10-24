@@ -22,29 +22,18 @@ namespace Hangfire.Raven.Samples.AspNetCore
 
         public IConfigurationRoot Configuration { get; }
 
-        // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            // Add framework services.
             services.AddMvc();
-
-            // Add Hangfire to services using RavenDB Storage
-            // BUG: https://github.com/cady-io/hangfire-ravendb/issues/15
-            //services.AddHangfire(t => t.UseRavenStorage(Configuration["ConnectionStrings:RavenDebug"]));
-
             services.AddHangfire(t => t.UseRavenStorage(Configuration["ConnectionStrings:RavenDebugUrl"], Configuration["ConnectionStrings:RavenDebugDatabase"]));
+            services.AddApplicationInsightsTelemetry();
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
-            loggerFactory.AddConsole(Configuration.GetSection("Logging"));
-            loggerFactory.AddDebug();
-
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
-                app.UseBrowserLink();
             }
             else
             {
@@ -53,24 +42,24 @@ namespace Hangfire.Raven.Samples.AspNetCore
 
             app.UseStaticFiles();
 
-            // Add Hangfire Server and Dashboard support
             app.UseHangfireServer();
             app.UseHangfireDashboard();
 
-            // Run once
             BackgroundJob.Enqueue(() => System.Console.WriteLine("Background Job: Hello, world!"));
 
             BackgroundJob.Enqueue(() => Test());
 
-            // Run every minute
             RecurringJob.AddOrUpdate(() => Test(), Cron.Minutely);
 
-            app.UseMvc(routes =>
+            app.UseRouting();
+
+            app.UseEndpoints(endpoints =>
             {
-                routes.MapRoute(
+                endpoints.MapControllerRoute(
                     name: "default",
-                    template: "{controller=Home}/{action=Index}/{id?}");
+                    pattern: "{controller=Home}/{action=Index}/{id?}");
             });
+
         }
 
         public static int x = 0;
@@ -79,7 +68,6 @@ namespace Hangfire.Raven.Samples.AspNetCore
         public static void Test()
         {
             Debug.WriteLine($"{x++} Cron Job: Hello, world!");
-            //throw new ArgumentException("fail");
         }
     }
 }

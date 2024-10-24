@@ -30,7 +30,7 @@ namespace Hangfire.Raven
             this._storage = storage;
             this._patchRequests = new List<KeyValuePair<string, PatchRequest>>();
             this._session = this._storage.Repository.OpenSession();
-            this._session.Advanced.UseOptimisticConcurrency = true;
+            this._session.Advanced.UseOptimisticConcurrency = false;
             this._session.Advanced.MaxNumberOfRequestsPerSession = int.MaxValue;
         }
 

@@ -1,12 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
+		<TargetFramework>net8.0</TargetFramework>
 		<Version>3.1.1</Version>
 		<AssemblyVersion>3.1.1.0</AssemblyVersion>
 		<FileVersion>3.1.1.0</FileVersion>
 		<Description>Tests for RavenDB job storage for Hangfire</Description>
-		<Description>A collection of .NET utilities for JSON</Description>
 		<Authors>Refreshing Collective &lt;contact@refreshing.io&gt;</Authors>
 		<Company>Refreshing Collective LLC</Company>
 		<Copyright>Copyright @ Refreshing Collective LLC</Copyright>
@@ -24,11 +23,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.0.0-preview-20170106-08" />
-		<PackageReference Include="xunit.runner.visualstudio" Version="2.2.0-beta5-build1225" />
-		<PackageReference Include="Moq" Version="4.7.1" />
-		<PackageReference Include="xunit" Version="2.2.0-beta5-build3474" />
-		<PackageReference Include="RavenDB.Database" Version="3.5.3" />
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+		<PackageReference Include="xunit" Version="2.9.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Moq" Version="4.20.72" />
 	</ItemGroup>
 
 </Project>
